@@ -3,7 +3,6 @@ import pandas as pd
 import scipy.stats as scstats
 from scipy.linalg import lstsq
 from scipy.signal import find_peaks
-from sklearn.linear_model import LinearRegression
 
 
 def StormSim_MRL(GPD_TH_crit: int, PEAKS, Nyrs: int):
