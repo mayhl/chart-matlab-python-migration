@@ -1,51 +1,26 @@
 import datetime
 import json
-from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from .core import PlotOptions, PSTOptions, ResponseData
+from ..common import bool_check, dict_to_dataclass
+from .core import PSTOptions, ResponseData
 from .fit import StormSim_PST_Fit
 
 # ---------------- Data classes ----------------
 
 
-def dict_to_dataclass(cls, dict_obj):
-    """Convert a dictionary to a dataclass instance."""
-    if not hasattr(cls, "__dataclass_fields__"):
-        raise ValueError("cls must be a dataclass type.")
-    valid_keys = {f.name for f in fields(cls)}
-    filtered_dict = {k: v for k, v in dict_obj.items() if k in valid_keys}
-    return cls(**filtered_dict)
-
-
-# ---------------- Utility functions ----------------
-def bool_check(value, message, allowed):
-    if value is None:
-        raise ValueError(message)
-    if not np.isscalar(value):
-        raise ValueError(message)
-    if value not in allowed:
-        raise ValueError(message)
-
-
-def error_handling(
-    response_data: ResponseData, pst_options: PSTOptions, plot_options: PlotOptions
-):
+def error_handling(response_data: ResponseData, pst_options: PSTOptions):
 
     checks = [
         (pst_options, "use_AEP", [0, 1], "0 (AEF) or 1 (AEP)"),
-        (plot_options, "create_plots", [0, 1], "0 (no plots) or 1 (all plots)"),
-        (plot_options, "y_log", [0, 1], "0 (linear) or 1 (log)"),
         (pst_options, "apply_GPD_to_SS", [0, 1], "0 (empirical) or 1 (GPD fit)"),
-        (pst_options, "stat_print", [0, 1], "0 (silent) or 1 (print)"),
         (pst_options, "GPD_TH_crit", [1, 2], "1 (lambda) or 2 (WMSE)"),
     ]
 
-    for obj, name, allowed, msg in checks:
-        bool_check(getattr(obj, name), f"{name} must be {msg}", allowed)
+    bool_check(checks)
 
     # DataType-specific checks
     if response_data.DataType == "POT":
@@ -94,54 +69,25 @@ def error_handling(
     if response_data.data is None or response_data.data.shape[1] < 2:
         raise ValueError("response_data.data must be M×2 or M×3 array")
 
-    # plot_options
-    if not isinstance(plot_options.staID, str) or plot_options.staID == "":
-        plot_options.staID = "resp"
-
-    if not isinstance(plot_options.yaxis_Label, str):
-        plot_options.yaxis_Label = ""
-
-    if not isinstance(plot_options.yaxis_Limits, (list, tuple, np.ndarray)):
-        plot_options.yaxis_Limits = []
-
-    if not isinstance(plot_options.path_out, (str, Path)):
-        plot_options.path_out = ""
-
-    return response_data, pst_options, plot_options
+    return response_data, pst_options
 
 
 # ---------------- Main PST function ----------------
 def StormSim_PST(
     response_data_dict: dict,
     pst_options_dict: dict,
-    plot_options_dict: dict,
+    # plot_options_dict: dict,
     test_ecdf_data: None | dict = None,
 ):
     """ """
     # Convert dicts to dataclasses
     response_data = dict_to_dataclass(ResponseData, response_data_dict)
     pst_options = dict_to_dataclass(PSTOptions, pst_options_dict)
-    plot_options = dict_to_dataclass(PlotOptions, plot_options_dict)
+    # plot_options = dict_to_dataclass(PlotOptions, plot_options_dict)
 
     # Step 1: Status printing
-    if pst_options.stat_print == 1:
-        print("***********************************************************")
-        print("***         StormSim-SST Tool Alpha Version 0.5         ***")
-        print("***                Release 1 - 20210809                 ***")
-        print("***                 FOR TESTING ONLY                    ***")
-        print("***********************************************************")
-        print("\n*** Step 1: Processing input arguments")
+    response_data, pst_options = error_handling(response_data, pst_options)
 
-    response_data, pst_options, plot_options = error_handling(
-        response_data, pst_options, plot_options
-    )
-
-    # Creating output path
-    plot_options.path_out = Path(plot_options.path_out) / "PST_outputs"
-    if plot_options.create_plots:
-        plot_options.path_out.mkdir(parents=True, exist_ok=True)
-
-    # Select which column to QC
     # NOTE:: Needed anymore?
     col_idx = 4 if pst_options.ind_Skew == 1 else 3
 
@@ -158,9 +104,6 @@ def StormSim_PST(
         "Warning": "",
         "ME": None,
     }
-
-    if pst_options.stat_print == 1:
-        print("*** Step 2: Verifying input datasets")
 
     procData = response_data.data.copy()
 
@@ -200,8 +143,6 @@ def StormSim_PST(
         raise ValueError("Data cleaning removed all values. Aborting PST.")
 
     # Step 4: Run StormSim POT or use existing POT
-    if pst_options.stat_print:
-        print(f"*** Step 3: Performing SST for station {plot_options.staID}")
 
     if response_data.DataType == "Timeseries":
         raise NotImplementedError("Timeseries SST")
@@ -222,13 +163,10 @@ def StormSim_PST(
         response_data.Nyrs,
         response_data.gprMdl,
         pst_options,
-        plot_options,
         test_ecdf_data=test_ecdf_data,
     )
 
     # Step 5: Save results
-    if pst_options.stat_print:
-        print(f"*** Step 4: Saving results to {plot_options.path_out}")
 
     dpath = Path()
 
@@ -262,10 +200,5 @@ def StormSim_PST(
 
     fname = "HC_emp.csv"
     SST_output["HC_emp"].to_csv(dpath / fname, index=False)
-
-    if pst_options.stat_print:
-        print("*** Evaluation finished.")
-        print("****** Remember to check outputs Check_datasets and Removed_datasets.")
-        print("*** StormSim-SST Tool terminated.")
 
     return SST_output, MRL_output

@@ -1,4 +1,4 @@
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -23,17 +23,7 @@ class PSTOptions:
     use_AEP: int = 0
     prc: list[float] | None = None
     apply_GPD_to_SS: int = 0
-    stat_print: int = 0
-    create_plots: int = 0
+    #    stat_print: int = 0
+    #    create_plots: int = 0
     y_log: int = 0
     bootstrap_sims: int = 100
-
-
-@dataclass
-class PlotOptions:
-    staID: str = "resp"
-    yaxis_Label: str = ""
-    yaxis_Limits: list[float] | None = None
-    y_log: int = 0
-    create_plots: int = 0
-    path_out: Path | str = ""

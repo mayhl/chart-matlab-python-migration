@@ -3,7 +3,8 @@ import pandas as pd
 import scipy.stats as scstats
 from scipy import interpolate
 
-from .core import PlotOptions, PSTOptions
+from ..common import aef2aep, get_grid_values
+from .core import PSTOptions
 from .mrl import StormSim_MRL
 
 
@@ -31,20 +32,6 @@ def ecdf_boot(empHC, Nsim: int, test_data: None | dict = None):
     boot = np.fliplr(np.sort(boot, axis=1))
 
     return boot
-
-
-def aef2aep(in_values):
-    """
-    By: E. Ramos-Santiago
-    Description: Script to adjust the trend of hazard curves with jumps. The
-    StormSim-SST tool can produce non-monotonic curves when the GPD threshold
-    parameter returned by the MRL selection method is too low. This causes
-    incomplete random samples and the potential to have jumps in the mean
-    curve and CLs.
-    History of revisions:
-    20210310-ERS: created function to patch the SST tool.
-    """
-    return (np.exp(in_values) - 1) / np.exp(in_values)
 
 
 def Monotonic_adjustment(x_in, y_in):
@@ -87,30 +74,14 @@ def StormSim_PST_Fit(
     Nyrs,
     gprMdl,
     pst_options: PSTOptions,
-    plot_options: PlotOptions,
+    #    plot_options: PlotOptions,
     test_ecdf_data: None | dict = None,
 ):
     """
     Function to perform StormSim hazard curve fitting with monotonic adjustment.
     """
-    # HC summary setup
-    # fmt: off
-    if pst_options.use_AEP:
-        HC_tbl_x = 1. / np.array([2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 1e4, 2e4, 5e4, 1e5, 2e5, 5e5, 1e6])
-    else:
-        HC_tbl_x = 1. / np.array([0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000])
-    # fmt: on
-    HC_tbl_rsp_y = np.arange(0.01, 20.01, 0.01)
 
-    # Set up AEFs for full HC
-    d = 1 / 90
-    v = 10.0 ** np.arange(1, -d, -d)
-    HC_plt_x = v
-    x = 10
-    for i in range(6):
-        HC_plt_x = np.concatenate((HC_plt_x, v[1:] / x))
-        x *= 10
-    HC_plt_x = np.flip(HC_plt_x)
+    HC_tbl_x, HC_tbl_rsp_y, HC_plt_x = get_grid_values(pst_options.use_AEP == 1)
 
     # Pre-allocate Output Fields
     Resp_boot_plt = np.full((pst_options.bootstrap_sims, len(HC_plt_x)), np.nan)
@@ -290,7 +261,6 @@ def StormSim_PST_Fit(
         "pd_k_mod": pd_k_mod,
     }
     SST_output = {
-        "staID": plot_options.staID,
         "RL": Nyrs,
         "HC_plt": HC_plt,
         "HC_tbl": HC_tbl_y,
