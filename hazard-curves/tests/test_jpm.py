@@ -1,46 +1,44 @@
-import numpy as np
-import scipy.io as sio
+from pathlib import Path
 
-from hazard_curves import StormSim_JPM
+from tools import compare1d
 
-# Loading MATLAB input data
-data = sio.loadmat("./data/jpm_input.mat")["data"]
+from hazard_curves import jpm
 
+# Options, compute from hazard_curves import StormSim_JPM
+
+# Input directory for test data
+input_path = Path("./input_data")
+# Directory to store output files
+output_path = Path("./test_output")
+# Path to parquet file contain data
+fpath = input_path / "jpm_input.parquet"
+# Column key value to select quantity to compute hazard curve from
+key = "response"
 
 # Configuring and executing JPM code
-response_data = dict(
-    data=data,
-    flag_values=[],
-    Ua=0.3738,
-    Ur=0.5840,
-    tide_std=0.1,
+opts = jpm.Options(
+    flag_value=[],
+    ua=0.3738,
+    ur=0.5840,
+    #    tide_std=0.1,
+    integration_mode="ITCS",
+    uncertainty_mode="combined",
+    tide_mode="none",
+    skewed=False,
+    percentiles=[16, 84],
+    output_path=output_path,
+    return_table=True,
+    use_aep=False,
 )
 
-jpm_options = dict(
-    integration_method=2,
-    uncertainty_treatment="combined",
-    tide_application=0,
-    use_AEP=0,
-    ind_Skew=0,
-    prc=[16, 84],
-)
+jpm.compute(fpath, key, opts)
 
-results = StormSim_JPM(response_data, jpm_options)
+fpath_test = output_path / "plot.parquet"
+fpath_target = input_path / "jpm_output_plt.parquet"
 
+compare1d("Plot", fpath_test, fpath_target)
 
-# Loading MATLAB out data for comparison
-keys = ["HC_plt", "HC_tbl", "HC_tbl_rsp_x", "HC_tbl_rsp_y", "HC_plt_x", "HC_tbl_x"]
-out_data = sio.loadmat("./data/jpm_output.mat")["data"]
-out_data = {k: out_data[0][0][i] for i, k in enumerate(keys, start=1)}
-
-# Comparing Python results with MATLAB
-for k in out_data.keys():
-    a = results[k]
-    b = out_data[k]
-    # Converting 1D array to 2D Nx1 array
-    if a.ndim == 1:
-        a = a[:, None]
-
-    err = np.abs(a - b)
-    err_max = np.nanmax(err)
-    print(f"{k}: {err_max}")
+if opts.return_table:
+    fpath_test = output_path / "table.parquet"
+    fpath_target = input_path / "jpm_output_tbl.parquet"
+    compare1d("Table", fpath_test, fpath_target)
