@@ -4,26 +4,20 @@ import numpy as np
 import pyarrow as pa
 from numpy.typing import NDArray
 from scipy.interpolate import interp1d
-from scipy.stats import norm
 
-from ..common import (
-    aef2aep,
-    bool_check,
-    dict_to_dataclass,
-    get_grid_values,
-    get_grid_values_v1,
-    get_plot_x_values,
-    get_table_x_values,
-    read_parquet,
-    save_parquet,
-)
+from hazard_curves.jpm.plot import PlotOptions
+
+from ..common import get_plot_x_values, get_table_x_values, read_parquet, save_parquet
 from .core import IntegrationEnum, Options, TideEnum
+
+# from scipy.stats import norm
 
 
 def compute(
     fpath: str | Path,
     key: str,
     options: dict | Options,
+    plt_opts: dict | PlotOptions | None = None,
 ):
 
     # Validating options
@@ -61,6 +55,14 @@ def compute(
     for f, d in datai:
         fpath = opts.output_path / f"{f}.parquet"
         save_parquet(d, schema, fpath)
+
+    if not plt_opts is None:
+
+        if isinstance(plt_opts, dict):
+            plt_opts = PlotOptions(**plt_opts)
+
+        _, d = datai[0]
+        plt_opts.plot(d, opts)
 
 
 def _interpolate(x: NDArray, y: NDArray, opts: Options) -> list[tuple[str, NDArray]]:
